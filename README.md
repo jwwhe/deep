@@ -13,6 +13,17 @@
 
 ## 30 秒跑起来
 
+**唯一的前置条件是 Node 版本**，先看一眼：
+
+```bash
+node -v                          # 需要 ≥ 20.10（本项目实测用的是 v22.18.0）
+```
+
+不够就去 <https://nodejs.org/> 装一个新的。除此之外**没有运行依赖、没有构建步骤** ——
+`dependencies` 与 `devDependencies` 都是空的，仓库里也没有 lockfile 要恢复，所以**不用 `npm install`**。
+
+在项目根目录执行这三行：
+
 ```bash
 cd dsh-whale-widget-proto        # 项目根目录，后面的命令都在这里执行
 cp .env.example .env             # 可选：没有 .env 也能直接启动，全部走默认值
@@ -29,9 +40,6 @@ npm start                        # 零依赖，连 npm install 都不用
   数据目录  C:\Users\<you>\AppData\Local\Temp\dshw-proto
   提示：未检测到 DEEPSEEK_API_KEY，当前用 mock 数据驱动原型；配好 key 后重启即接真实余额。
 ```
-
-**环境要求**：Node.js ≥ 20.10（实测 v22.18.0）。`npm test` 传的是 glob 参数，需要 Node ≥ 21。
-无运行依赖、无构建步骤、无包管理器 lockfile 之外的东西 —— `dependencies` 与 `devDependencies` 都是空的。
 
 **关于这只鲸鱼长什么样**：`src/widget/whale-girl.png` 是**仓库里唯一的一张形象图**（`public/favicon.svg`
 是演示页的标签页图标，与形象无关）—— 深蓝渐变长发、女仆装、鲸鳍耳加一条鲸尾的**Q 版（大头）全身立绘**，
@@ -63,6 +71,8 @@ npm test          # 143 条单元测试（node:test，不起端口，纯 handler
 npm run test:e2e  # 39 项端到端检查：真起进程、真发 HTTP、真读落盘文件
 npm run check     # 上面两个连着跑
 ```
+
+跑测试的 Node 门槛比启动高一档：`npm test` 传的是 glob 参数，需要 **Node ≥ 21**（`npm start` 只要 ≥ 20.10）。
 
 最近一次的真实输出贴在 [`docs/verification.md`](docs/verification.md)，包括浏览器实测数据。
 
@@ -147,74 +157,31 @@ DSH 宿主契约（`/dsh-whale/*`，字段名对齐参考项目实测）：
 
 ---
 
-## 作为 DSH 插件安装
+## 装进 DSH 客户端（作为插件）
 
-`lib/index.js` 是一个 cordis 插件（`export function apply(ctx, config)` + `inject: ['webServer']`），
-契约按本机桌面安装里的**真包**核实，并分别用真 `dsh-host-webserver`（16/16）和真
-`cordis-plugin-loader`（9/9）跑通，见 [`docs/verification.md`](docs/verification.md) 第八节。
-挂载声明是根目录的 `cordis.patch.yml`（`package.json` 的 `dsh.bundle.patch` 指向它），插件 id 用
-`dsh-whale-widget-proto` 而不是上游的 `dsh-whale-widget`，避免和已发布同名包冲突。
+装进 DSH 之后，鲸鱼娘常驻在**客户端窗口的右下角**，余额直接取你**已经登录的 DeepSeek 账号**，不用自己申请 API Key。
 
-> **导出形状是硬约束**：真 Loader 的 `unwrapExports()` 先取 `default`，所以 `export default apply`
-> （裸函数）会让 `inject` 整体丢失，插件在客户端里静默激活失败。本仓库用
-> `export default { name, inject, apply }`；改这一行前先看 `test/plugin.test.js` 里那条照抄
-> `unwrapExports()` 的用例。
+**第 1 步：装。** 把下面这行里的路径换成**这个仓库根目录的绝对路径**（就是放 `package.json` 的那一层），
+然后在终端执行。桌面客户端用 `desktop`，网页版用 `web`：
 
-```bash
-dsh plugin --profile desktop add link:D:\path\to\dsh-whale-widget-proto   # 源目录改动会同步
-dsh plugin --profile web     add link:D:\path\to\dsh-whale-widget-proto
+```powershell
+dsh plugin --profile desktop add link:D:\path\to\dsh-whale-widget-proto
 ```
 
-`link:` 需要 pnpm 能联网重解析该 profile 里**已有**的依赖；机器拉不动外网时（本机就是这种状况）
-可手工做等价动作，客户端启动时读的就是这三样东西：
+`link:` 是软链接，好处是以后改了源码不用重新安装。
 
-1. `<profile>/node_modules/dsh-whale-widget-proto` → 指向本目录的 junction；
-2. `<profile>/package.json` 的 `dependencies` 补 `"dsh-whale-widget-proto": "link:<本目录绝对路径>"`；
-3. 同文件 `dsh.profile.bundles` 末尾追加 `dsh-whale-widget-proto`。
+> 提示找不到 `dsh` 命令？桌面客户端自带它，在 `<客户端安装目录>\resources\runtime\cli\bin\dsh.cmd`
+> （本机就是 `D:\dsh-desk-app\resources\runtime\cli\bin\dsh.cmd`），用全路径执行即可。
 
-改完**必须完全退出并重启客户端**才生效（运行中的实例不会热加载 profile，注入表也只在宿主 `ready` 时收集一次）。
-「完全退出」= 托盘图标右键退出，不是点窗口右上角的 ✕ —— 关窗口只是藏起来，进程还在，此时再点图标会被
-Electron 的单实例锁吞掉，看起来就像「客户端打不开」。
+**第 2 步：完全退出客户端。** 用**托盘图标右键退出**，点窗口右上角的 ✕ 不算退出 —— 进程还在，
+这时再点图标会被单实例锁吞掉，看起来就像「客户端打不开」。
 
-**重启以后请耐心等**：本机实测完整客户端启动 **75–92 s**，其中约 74 秒是宿主自己在
-CPU 密集地装载 profile 里的 188 个模块（从 121 MB 的 `app.asar` 读），并且要 `await` 完 `desktop-office`
-才发 `ready`，Electron 的界面必须等这张注入表。挂件在这几十秒里只占 **67 ms**，不是瓶颈 ——
-而且做过摘掉插件的 A/B（不带插件 75.7 / 78.6 s，带插件最快一次 74.8 s），**耗时与插件无关**，
-「转圈很久」别怀疑到插件头上（八组采样与分段计时见 `docs/verification.md` 第九节）。
+**第 3 步：重新打开，耐心等一分多钟。** 本机实测客户端启动要 **75–92 s**，慢的是宿主自己装载那 188 个模块，
+挂件只占 67 ms。等界面出来，右下角应该就有她；余额那一格可能还要最多 60 秒才从
+「宿主没有可用的余额来源」变成真实数字，**这是正常现象，等一会儿就好**。
 
-### 给 AI 助手的安装说明
-
-> 请把 `dsh-whale-widget-proto` 装进 DSH 的 **desktop**（桌面客户端）或 **web** profile：
-> 1. 确认本目录 `package.json` 带 `dsh.bundle.patch: "./cordis.patch.yml"`、`main`/`exports` 指向 `lib/index.js`，
->    且 `lib/index.js` 的 `default` 导出是 `{ name, inject, apply }` 而不是裸函数；
-> 2. 先备份 `<profile>/package.json` 与 `pnpm-lock.yaml`，再执行 `dsh plugin --profile desktop add link:<本目录绝对路径>`
->    （路径必须是仓库根，且绝对）；pnpm 因网络失败时按上面「手工等价动作」三条落盘，不要跳过 bundles 那一步；
-> 3. 校验组合结果：`dsh --profile desktop --dump-config` 会被拒（desktop profile 归 Electron 应用管），
->    改用客户端同一份库函数：`node -e` 调 `@deepseek-ai/dsh-app-boot` 的 `loadProfileDirectory('dsh', <profile目录>, <dsh 包 package.json>)`，
->    确认本包在 `layers` 里而不在 `skippedBundles` 里，且 `composeEntries` 的结果含 `{id:'dsh-whale-widget-proto'}`；
->    **但这条只证明「会被装载」，不证明「装载得起来」**——第 4 步才是；
-> 4. 完全退出客户端再启动，右下角应出现鲸鱼娘。若没有，按顺序查：
->    - 先确认客户端真的重启过：`Get-Process` 看进程 `StartTime`，别把「没退出」当成「打不开」；
->    - `curl http://127.0.0.1:<宿主端口>/dsh-whale/balance.json`：空 body 的 404 = 路由没注册。
->      `503 {"code":"guard-unavailable"}` **不是故障**，是宿主的 `connection` 服务还没注册（启动头两百毫秒内正常现象）；
->      `401 unauthenticated` 才是「路由在、门禁在，但你没有宿主会话」。
->      拿同一个 profile 里**已加载的第三方插件**做对照再下结论（本机 `dsh-purge` 的 `/redteam/api`
->      未登录也回 `405 {"ok":false,"error":"POST only"}`，说明插件路由不需要会话就能命中）；
->    - 路由没注册 → 十有八九是插件激活失败，而激活失败只写进引擎 stderr（Electron 把它收在内存里，
->      不弹界面）。离线复现办法：用真 `cordis-plugin-loader` 走一遍装载（`.dsh-probe/loader-probe.mjs`），
->      它会直接把 `cannot get property "x" without inject` 这类原因打出来；
->    - index.html / `collectIndexInjections()` 里有没有那一行 `import('/dsh-whale/widget.js')`。
->
-> 余额来源按三级回落，每次轮询重新判定：已登录的 `ctx.deepseekAccount.getBalance()` →
-> 宿主凭据库的 `DEEPSEEK_API_KEY` → 环境变量。都没有时挂件显示「未配置」，不会伪装成 0 元。
-> 数据落盘默认跟着宿主走：`$DSH_HOME/whale-widget`（可用 `DSHW_DATA_DIR` 覆盖）。
->
-> **真机实测到的一个体验坑（不是 bug，但会吓人）**：冷启动后挂件会有**最多 60 秒**显示
-> 「宿主没有可用的余额来源（…）」+ 灰脸，然后自己变成真实余额（卡片这里透传 provider 原文，
-> 所以哪一级来源没给数是写在界面上的，不用去翻看不存在的引擎日志）。原因是宿主的 `authenticateWebHost` 排在引擎
-> `ready` 之后，而挂件第一拍是立即取数 —— 那一刻确实没有会话。`unconfigured` 属配置类错误，按正常轮询间隔重试。
-> **要缩短这段得同时改两处**：引擎侧 `DSHW_INTERVAL_MS`（默认 60000，可调）与前端
-> `assets/whale-widget.js` 里写死的 `INTERVAL_MS = 60_000`；只调环境变量不够，因为浏览器那一拍也要 60 秒才再问一次。
+命令跑不通、或者右下角一直没出现：看 **[`docs/install-dsh-plugin.md`](docs/install-dsh-plugin.md)** ——
+手工安装、装前的契约检查、排查表，以及写给 AI 助手的完整清单都在那里。
 
 ---
 
@@ -231,7 +198,7 @@ assets/        whale-widget.js —— DSH 注入入口
 lib/index.js   DSH 插件入口（cordis：apply + inject，注册 /dsh-whale 前缀路由与 index 注入）
 test/          143 条 node:test 单元测试；helpers/tmp.js 统一建临时目录、进程退出时清掉
 scripts/       e2e-check.js —— 真进程 + 真 HTTP 的 39 项检查
-docs/          architecture / limitations / verification
+docs/          architecture / install-dsh-plugin / limitations / verification
 ```
 
 `package.json` 里 `private: true` 是刻意的：这是原型，没发布到 npm。真要发包，去掉它并按需改包名。
