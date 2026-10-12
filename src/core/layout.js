@@ -104,3 +104,54 @@ export function restingPosition(input) {
   const anchorX = horizontal === 'left' ? margin : maxX;
   return { x: clamp(anchorX, 0, Math.max(0, viewportWidth - width)), y: clamp(anchorY, 0, Math.max(0, viewportHeight - height)) };
 }
+
+/**
+ * 控件层（☰ 按钮与设置面板）的贴位。
+ *
+ * 挂件本体靠 transform: scale() 缩放，控件**故意不参与缩放**：scale 0.5 时 208px 的面板会变成
+ * 104px、12px 的字变成 6px，鼠标点不准、字也读不了。而 fixed 元素在带 transform 的祖先里仍然会被
+ * 那个 transform 作用，所以控件只能挂在缩放层之外，坐标按「挂件画出来的矩形」逐次算。
+ *
+ * 默认：按钮居中对齐挂件底缘（脚边），面板右对齐挂件右缘、开在挂件上缘之外。
+ * 面板头顶放不下就翻到脚下，两边都放不下就贴顶 —— 宁可盖住人，也别让人摸不到控件。
+ */
+export function placeControls(input) {
+  const { anchor, menu, button, viewport, gap = 8 } = input;
+  const flat = {
+    'anchor.left': anchor?.left,
+    'anchor.top': anchor?.top,
+    'anchor.width': anchor?.width,
+    'anchor.height': anchor?.height,
+    'menu.width': menu?.width,
+    'menu.height': menu?.height,
+    'button.width': button?.width,
+    'button.height': button?.height,
+    'viewport.width': viewport?.width,
+    'viewport.height': viewport?.height,
+    gap,
+  };
+  for (const [name, value] of Object.entries(flat)) {
+    if (!Number.isFinite(value)) throw new TypeError(`placeControls 需要有限数字，${name}=${value}`);
+  }
+
+  // 视口比控件还窄时上界会小于下界，这时以下界为准：贴边也比丢出屏幕好。
+  const fitX = (want, width) => clamp(want, gap, Math.max(gap, viewport.width - width - gap));
+  const fitY = (want, height) => clamp(want, gap, Math.max(gap, viewport.height - height - gap));
+
+  const buttonPos = {
+    x: fitX(anchor.left + (anchor.width - button.width) / 2, button.width),
+    y: fitY(anchor.top + anchor.height - button.height, button.height),
+  };
+
+  let menuY = anchor.top - menu.height - gap;
+  if (menuY < gap) {
+    const below = anchor.top + anchor.height + gap;
+    menuY = below + menu.height + gap <= viewport.height ? below : gap;
+  }
+  const menuPos = {
+    x: fitX(anchor.left + anchor.width - menu.width, menu.width),
+    y: fitY(menuY, menu.height),
+  };
+
+  return { button: buttonPos, menu: menuPos };
+}

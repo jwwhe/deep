@@ -46,11 +46,10 @@ npm start                        # 零依赖，连 npm install 都不用
 立绘取不到时（路径写错、素材被删）挂件会把形象层整层藏掉并在 console 警告一次，只留余额卡片，
 不会留一个裂图图标 —— 仓库里没有第二张形象图可回落。
 
-- 把你的图放成 `src/widget/whale-girl.png`（同样底边对齐、透明底，效果最接近）；
-- 或改 `src/widget/skin.js` 的 `CHARACTER_URL` 指向任意图片 URL —— 交互逻辑不依赖这张图。
-
-立绘取不到时（路径写错、素材被删）挂件会把形象层整层藏掉并在 console 警告一次，只留余额卡片，
-不会留一个裂图图标 —— 仓库里没有第二张形象图可回落。
+**缩放与控件**：`大小`（scale 0.5~3）只缩她本人和余额卡片。**设置面板与 ☰ 按钮不参与缩放** ——
+它们恒为 208×183 与 22×22 CSS 像素，位置按挂件画出来的矩形现算并夹在视口内，
+所以缩到 0.5 时面板比她还大，字和滑块仍然好读好点。做法与实测数字见
+[`docs/architecture.md`](docs/architecture.md) 的挂件结构、[`docs/verification.md`](docs/verification.md) 第十四节。
 
 **接真实余额**：把 `.env` 里的 `DEEPSEEK_API_KEY` 填上（在 <https://platform.deepseek.com/api_keys> 申请）后重启。
 provider 会自动从 `mock` 切到 `deepseek`，无需改其他配置。
@@ -60,7 +59,7 @@ provider 会自动从 `mock` 切到 `deepseek`，无需改其他配置。
 ## 验证改动
 
 ```bash
-npm test          # 138 条单元测试（node:test，不起端口，纯 handler 层）
+npm test          # 143 条单元测试（node:test，不起端口，纯 handler 层）
 npm run test:e2e  # 39 项端到端检查：真起进程、真发 HTTP、真读落盘文件
 npm run check     # 上面两个连着跑
 ```

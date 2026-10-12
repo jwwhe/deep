@@ -31,7 +31,7 @@ src/server/   handler 与接线。
 ```
 
 `createApp` 不 import `http`、不 import `fs` 之外的 Node 专有物，所以路由、校验、回环边界全部能在
-`node --test` 里直接调用，不必起端口 —— 这是 123 条单测跑得快的原因。
+`node --test` 里直接调用，不必起端口 —— 这是 143 条单测跑得快的原因。
 
 ## 二、免打包的关键：同一份源码在两边都能解析
 
@@ -105,3 +105,32 @@ DEEPSEEK_API_KEY ──▶ config ──▶ provider.fetchBalance ──▶ bala
 原因很实际：本机没有 `dsh` CLI，拿不到宿主，任何具体的注册签名都是猜。与其写一个「装了但右下角
 什么都没有」的猜测实现（参考项目 issue #162 里最难查的一类故障），不如把唯一没验证的点做成一个会响的洞，
 并把已验证的部分指到具体测试文件上。`cordis.patch.yml` 同理 —— 形状抄自参考项目，未真机验证，文件里写明了。
+
+## 七、挂件的 DOM 分层：缩放层与固定控件层
+
+`whale.js` 往 `body` 上挂**两个兄弟节点**，而不是把一切塞进一个根盒：
+
+```
+body
+ ├─ .dshw-root       transform: scale(s), transform-origin: top left —— 会缩放
+ │    └─ .dshw-stage → 立绘 / 余额卡片 / 气泡
+ └─ .dshw-controls   不套任何 transform —— 恒定价
+      ├─ .dshw-menu-button（☰，22×22）
+      └─ .dshw-menu   （设置面板，208 宽）
+```
+
+为什么要拆两层：`大小`滑块（scale 0.5~3）想改的是「她占多大地方」，不是「控件有多大」。
+面板若留在缩放层里，scale 0.5 时 208 px 会变 104 px、12 px 的字会变 6 px，鼠标点不准、字也读不动。
+而**光改定位方式逃不掉** —— CSS 里 `position: fixed` 只改变包含块，祖先一旦带 `transform`，
+fixed 后代照样会被那个 transform 作用（缩放/位移都会带上）。所以控件必须物理上移出缩放层。
+
+代价是坐标得自己算：`.dshw-controls` 的两个元素靠 `placeControls()`（`core/layout.js`，纯函数）
+按「挂件**实际画出来的矩形**」现算 `left/top`，并夹在视口内。调用方是 `whale.js` 的 `paintControls()`，
+在每次几何变化后跑一遍；它用 `getBoundingClientRect()` 而非逻辑盒，因为卡片是 `nowrap` 的，
+实际会顶出 128 px 的根盒，面板必须让开真实上缘。规则是：☰ 居中贴挂件底缘，面板右对齐挂件右缘、
+开在挂件上缘之外；头顶放不下就翻到脚下，两边都放不下就贴顶 —— 宁可盖住人，也别让人摸不到控件。
+
+拆分带来的两个隐性账：① 控件层脱离了 `.dshw-root`，原来继承的字体/行高/文字颜色/`user-select`
+必须在 `.dshw-controls` 上补一遍；② `display: none` 时 `offsetWidth/Height` 全是 0，量不到真实尺寸，
+所以 `toggleMenu()` 在取消 hidden **之后**再贴一次位。吸附、拖拽、镜像都只看缩放层，不受这层拆分影响。
+

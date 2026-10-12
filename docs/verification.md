@@ -11,19 +11,21 @@ Node v22.18.0 · npm 10.9.3 · Windows 11 (10.0.28120) x64 · Git Bash
         无头（`--headless=new --screenshot`），因为当时 browser-use 连不上（`list_pages` 报 isDestroyed）
 ```
 
-## 一、单元测试 138/138
+## 一、单元测试 143/143
 
 ```
 $ npm test
-# tests 138
-# pass 138
+# tests 143
+# pass 143
 # fail 0
+# cancelled 0
+# skipped 0
 ```
 
 | 文件 | 覆盖 |
 | --- | --- |
 | `money.test.js` | 定点解析/格式化、half-up、非法输入、滚动步长单调 |
-| `layout.test.js` | 吸附四边与角落、`margin` 内缩、视口小于挂件、非有限数字抛错 |
+| `layout.test.js` | 吸附四边与角落、`margin` 内缩、视口小于挂件、非有限数字抛错；`placeControls` 的控件贴位（面板尺寸恒定、四向 clamp、头顶放不下翻脚下、上下都不够贴顶） |
 | `ledger.test.js` | baseline/spend/adjustment/rollover、跨天、裁剪 |
 | `balance.test.js` | 状态机：stale 沿用旧值、指数退避序列、并发去重、`unconfigured` 视为 permanent |
 | `jsonpath.test.js` | `a.b[0].c` 最小路径语法 |
@@ -99,7 +101,7 @@ GET /app.css · /demo.js · /widget/{state,whale,skin,audio}.js · /core/{money,
 | 图片解码 | `naturalWidth=610`、`complete=true`，`currentSrc` 在演示页是 `/widget/whale-girl.png`、在 `/dsh.html` 是 `/dsh-whale/widget/whale-girl.png`（两条前缀都通） |
 | 不透明像素包围盒 | `x 45..610 / y 10..609`（画布 610×610）→ 纵向占 98.4%、横向 92.6%，透明边距极小，`object-fit: contain` 不会把人物缩成小点 |
 | 卡片是否压脸 | 卡片底边比立绘盒顶高 **4px**（`ib.top - card.bottom = 4`，四档视口一致）；`dshw-float` 的 ±3px 浮动时最小间隙 1px，不遮脸 |
-| 贴左镜像 | class `dshw-root at-left mirrored`；`img` 计算样式 `matrix(-1,0,0,1,0,0)`，而 `.dshw-card` 仍是 `translateX(-50%)`、`.dshw-menu-button` 不变 → **只翻立绘，文字不翻**（截图里蝴蝶结/尾鳍换边，菜单与余额照常可读） |
+| 贴左镜像 | class `dshw-root at-left mirrored`；`img` 计算样式 `matrix(-1,0,0,1,0,0)`，而 `.dshw-card` 仍是 `translateX(-50%)`、`.dshw-menu-button` 不变 → **只翻立绘，文字不翻**（截图里蝴蝶结/尾鳍换边，菜单与余额照常可读）。**注**：`at-left` 这个类名与「菜单跟着 root 类名换开向」在第十四节那轮已被坐标贴位取代，本行记录的是当时的实测 |
 | stale / error 去色 | 加 `stale` → `... saturate(.72) brightness(.96)`；加 `error` → `... grayscale(.6) sepia(.22) hue-rotate(-18deg) saturate(1.3)`；去掉 class 后回到只有 `drop-shadow` |
 | 截图留证 | 本机临时目录下的 `girl-final-scale1.png`（正常）、`girl-mirrored.png`（镜像 + 菜单）、`girl-bubble-25x.png`（scale 2.5 看细节）。**没有入库**：截图本身也含上游美术素材，随包分发同样越过许可边界 |
 
@@ -119,7 +121,7 @@ GET /app.css · /demo.js · /widget/{state,whale,skin,audio}.js · /core/{money,
 
 | 动作 | 结果 |
 | --- | --- |
-| 拖到左缘 | `x=16`，class `dshw-root at-left mirrored`（镜像 + 菜单改向右开） |
+| 拖到左缘 | `x=16`，class `dshw-root at-left mirrored`（镜像 + 菜单改向右开；`at-left` 已被第十四节的坐标贴位取代） |
 | 拖到右缘 | `gapRight=16` |
 | 拖到上缘 | `gapTop=16` |
 | 拖到右下角 | `gapRight=16`、`gapBottom=16` |
@@ -695,7 +697,89 @@ junction 本身恰好被 `node_modules/` 这条规则挡住，但整个目录仍
 
 
 
-## 十四、没做/没验的
+## 十四、设置面板与 ☰ 不随 `大小`缩放（控件层拆出缩放层）
+
+用户指令「他的大小设定的菜单栏不应该跟随挂件的大小而改变大小，而是一个固定的让用户能舒服的修改大小音量这些东西」。
+
+### 1. 结论先说：为什么必须换一棵 DOM 树
+
+原来的写法是面板和 ☰ 都在 `.dshw-root` 里面，`root.style.transform = scale(s)` 会把它们一起缩掉：
+scale 0.5 时 208 px 的面板变 104 px、12 px 的字变 6 px。
+
+**光改成 `position: fixed` 逃不掉** —— 这是本轮最关键的一条 CSS 事实：`fixed` 只是改变**包含块**，
+祖先一旦带 `transform`（或 `filter` / `will-change: transform`），fixed 后代照样会被那个 transform 作用。
+所以只有两条路：
+
+| 方案 | 结论 |
+| --- | --- |
+| 反缩放 `scale(1/s)` 塞回缩放层里 | 否掉。极端档位（scale 3）raster scale 可能取到 3 让文字发虚；clamp 要在「布局空间 ÷ scale」里绕一圈；`transform-origin` 组合易错 |
+| **控件移出缩放层，成为 `body` 下 `.dshw-root` 的兄弟节点 `.dshw-controls`** | 采用。尺寸天然恒定价，代价是坐标自己算 |
+
+落点：数值规则照旧进 `core`（`placeControls()` 是 `src/core/layout.js` 里的纯函数，非有限数字一律 `TypeError`），
+`whale.js` 只做 DOM 胶水并新增 `paintControls()`；结构与被否掉的方案写在 [`architecture.md`](architecture.md) 第七节。
+
+### 2. 静态实测：三档视口 × 五档 scale（无头 Edge 155.0.4283.45 + CDP，`Emulation.setDeviceMetricsOverride` 造视口）
+
+每档都量 `getBoundingClientRect` 实测值，不看代码推断。**39 组场景（15 组初位 + 24 组贴边）里面板尺寸全是 `208x183`，一行不差**：
+
+| 视口 | scale | 挂件根盒 | 面板实测（尺寸@坐标） | 字号/滑块高 | ☰ | 四向溢出 | 压卡片/本体/按钮 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1280×800 | 0.5 | 64×64 | 208×183 @ (1056,522) | 12px / 16px | 22×22，居中差 0、脚边差 0 | L0 T0 R0 B0 | 0 / 0 / 0 |
+| 1280×800 | 3 | 384×384 | 208×183 @ (1056,168) | 12px / 16px | 同上 | 全 0 | 0 / 0 / 0 |
+| 420×760 | 0.5 | 64×64 | 208×183 @ (8,482) | 12px / 16px | 同上 | 全 0 | 0 / 0 / 0 |
+| 420×760 | 3 | 384×384 | 208×183 @ (192,128) | 12px / 16px | 同上 | 全 0 | 0 / 0 / 0 |
+| 320×700 | 0.5 | 64×64 | 208×183 @ (8,422) | 12px / 16px | 同上 | 全 0 | 0 / 0 / 0 |
+| 320×700 | 3 | 384×384 | 208×183 @ (104,68) | 12px / 16px | 同上 | 全 0 | 0 / 0 / 0 |
+
+（1 与 1.5、2 档同样恒定价，完整 39 行输出在本轮脚本 stdout。）
+scale 0.5 时面板 208 px 比挂件本人 64 px **大三倍多** —— 这是刻意的，写进 [`limitations.md`](limitations.md) §7。
+另外每一组都验了「面板中心 `elementFromPoint` 命中面板自身」，即没被别的层盖住。
+
+### 3. 真输入拖拽：贴四边 × scale 0.5/1/3 × 三档视口 = 36 组，全 PASS（本机临时端口：服务 4189、CDP 9334）
+
+拖拽是**必须复验**的部分：贴边改变了挂件坐标，面板要跟着换边贴位。举几组代表数字：
+
+| 场景 | 挂件实测 | 面板实测 | 命中的规则 |
+| --- | --- | --- | --- |
+| 1280×800，拖到左缘，s=1 | 128×128 @ (16,16) | 208×183 @ (8,**152**) | 头顶要 `16-183-8 < 0` 放不下 → 翻到脚下 `16+128+8` |
+| 1280×800，拖到右缘，s=1 | 128×128 @ (1136,16) | 208×183 @ (**1056**,152) | 右对齐挂件右缘 `1136+128-208` |
+| 420×760，拖到右缘，s=0.5 | 64×64 @ (340,16) | 208×183 @ (**196**,88) | 挂件在左缘时 `x=8`，在右缘时按 clamp 落在 196 |
+| 320×700，拖到底缘，s=3 | 384×384 @ (0,400) | 208×183 @ (104,**68**) | 脚下放不下 → 贴顶 `y=gap`，宁可盖住人也别摸不到控件 |
+| 1280×800，拖到上缘，s=3 | 384×384 @ (880,16) | 208×183 @ (1056,**408**) | 翻到脚下 `16+384+8` |
+
+每一组的判定项：面板尺寸恒 208×183、字号 12px、四向溢出 0、不压卡片、不压本体、面板可点、拖拽途中面板跟手。36/36 PASS。
+
+**拖拽手法这一轮换了**（前几轮的方法在这里失效，记下来避免重复踩）：
+`dispatchEvent` 合成的 `PointerEvent` **拖不动这个挂件**。根因是手势处理里有 `el.stage.setPointerCapture(pointerId)`，
+合成指针的 id 不在浏览器活动指针集合里 → 抛 `NotFoundError`；而监听器内部的异常**不会**从 `dispatchEvent` 传出来，
+于是 `gesture` 根本没被赋值，看上去像「代码没响应」而不是「事件不合法」。本轮的静态探针输出里那一列
+`拖拽=ok/没移动` 就是这条路的失败证据（挂件留在初位）。改用 CDP `Input.dispatchMouseEvent`
+（`mousePressed`/`mouseMoved`/`mouseReleased`）走真输入管线后，36 组全部跑通。
+
+顺带一个取证坑：第一次出截图时按「初位应当贴在右下」算裁剪框，但前面的拖拽已经把挂件留在了左缘，
+裁出来是空的。改成**先回报实测矩形、再按那个矩形裁**（`shot.mjs`）才对 —— 复用脚本前先确认它的取样区假设。
+
+### 4. 目视与清晰度
+
+`deviceScaleFactor 2` 截图两份（`full-0.5.png` / `full-3.png` 与按实测矩形裁出的 `crop-0.5.png` / `crop-3.png`，
+均在作者本机临时目录，**未入库**）：scale 0.5 那张是「小挂件 + 全尺寸面板」，scale 3 那张面板仍是 208 px 且
+**文字边缘锐利** —— 因为它压根没进 raster 缩放，反缩放方案担心的发虚在这里不存在。
+
+### 5. 回归
+
+- `npm test` **143/143**（新增 5 条覆盖 `placeControls`：默认贴位、面板尺寸恒定、四向 clamp、翻脚下、贴顶、非有限数字抛错）。
+- `npm run test:e2e` **39/39**，无新增项（控件层是 DOM 结构改动，端口与契约都没碰）。
+- 镜像、吸附、拖拽、`隐藏菜单`、音效与余额显示均按原路径复验：`.dshw-controls.menu-hidden` 接管了原来
+  `.dshw-root.menu-hidden` 的职责，☰ 的显隐逻辑没变。
+- `npm pack --dry-run` = **37 files / 654.9 kB / unpacked 811.2 kB**（文件数与第十三节的 37 一致，只多文档字节）。
+
+### 6. 这一轮没做的
+
+- **气泡 `.dshw-bubble` 仍在缩放层里**，scale 3 会顶出视口上沿（`limitations.md` §7 那条老坑，本轮范围是控件层，没有扩到手势/气泡层）。
+- 没重启桌面客户端复拍真机（本轮改的是挂件 DOM 结构，真机那一屏仍属未验，见第十五节）。
+
+
+## 十五、没做/没验的
 
 见 [`limitations.md`](limitations.md)。本轮之后仍然欠着的：
 
@@ -711,3 +795,6 @@ junction 本身恰好被 `node_modules/` 这条规则挡住，但整个目录仍
   → 本目录），新素材已经在客户端能看到的那份目录里；第十二、十三两轮改的都只有素材字节（第十三连代码与 CSS 都没动），
   注入链路与余额口径一行没碰，而真机重启一次要 75–92 秒。形象本身在真浏览器里验过（第六节末、第十一节、
   第十二节、第十三节的三档 CDP 实测），**真机那一屏仍属未验**。
+- **第十四轮改了挂件的 DOM 结构**（控件从缩放层里拆成兄弟节点），这一条比换素材更需要在真机上看一眼：
+  宿主注入的样式表里如果有针对 `.dshw-root > *` 之类的通配规则，理论上可能碰到新的 `.dshw-controls`。
+  本轮只在独立服务的演示页与 `/dsh.html`（模拟注入页，e2e 第 49 行那条）里验过，**宿主界面里那一屏仍未验**。

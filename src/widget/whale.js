@@ -1,7 +1,7 @@
 // 挂件挂载层：只做「把核心纯逻辑的判定结果画出来、把手势翻译成状态」。
 // 任何数值规则（吸附、金额、滚动序列、轮询）都在 ./core 里，这里不重复实现。
 import { formatAmount, rollingFrames } from '../core/money.js';
-import { resolveSnap, restingPosition, EDGES } from '../core/layout.js';
+import { resolveSnap, restingPosition, placeControls, EDGES } from '../core/layout.js';
 import { DEFAULT_SIZE, FIGURE_HTML, ensureStyle } from './skin.js';
 import { createAudio } from './audio.js';
 
@@ -70,32 +70,38 @@ export function mountWhale(options = {}) {
         <div class="dshw-flag"></div>
       </div>
       <div class="dshw-bubble" hidden></div>
-      <button type="button" class="dshw-menu-button" aria-label="鲸鱼娘菜单" aria-expanded="false">☰</button>
-      <div class="dshw-menu" hidden role="menu" aria-label="鲸鱼娘设置">
-        <h2>鲸鱼娘</h2>
-        <div class="dshw-row"><label for="dshw-scale">大小</label><input id="dshw-scale" type="range" min="0.5" max="3" step="0.05"></div>
-        <div class="dshw-row"><label for="dshw-volume">音量</label><input id="dshw-volume" type="range" min="0" max="1" step="0.05"></div>
-        <div class="dshw-row"><button type="button" data-action="sound">音效：开</button><button type="button" data-action="snap">吸附：开</button></div>
-        <div class="dshw-row"><button type="button" data-action="mirror">镜像：开</button><button type="button" data-action="hide-menu">隐藏菜单</button></div>
-        <div class="dshw-row"><button type="button" data-action="refresh">立刻刷新</button></div>
-        <div class="dshw-version"></div>
-      </div>
+    </div>`;
+
+  // 控件不参与缩放：整块做成 .dshw-root 的兄弟节点，见 skin.js 里 .dshw-controls 那段注释。
+  const controls = doc.createElement('div');
+  controls.className = 'dshw-controls';
+  controls.innerHTML = `
+    <button type="button" class="dshw-menu-button" aria-label="鲸鱼娘菜单" aria-expanded="false">☰</button>
+    <div class="dshw-menu" hidden role="menu" aria-label="鲸鱼娘设置">
+      <h2>鲸鱼娘</h2>
+      <div class="dshw-row"><label for="dshw-scale">大小</label><input id="dshw-scale" type="range" min="0.5" max="3" step="0.05"></div>
+      <div class="dshw-row"><label for="dshw-volume">音量</label><input id="dshw-volume" type="range" min="0" max="1" step="0.05"></div>
+      <div class="dshw-row"><button type="button" data-action="sound">音效：开</button><button type="button" data-action="snap">吸附：开</button></div>
+      <div class="dshw-row"><button type="button" data-action="mirror">镜像：开</button><button type="button" data-action="hide-menu">隐藏菜单</button></div>
+      <div class="dshw-row"><button type="button" data-action="refresh">立刻刷新</button></div>
+      <div class="dshw-version"></div>
     </div>`;
 
   const el = {
     stage: root.querySelector('.dshw-stage'),
     figure: root.querySelector('.dshw-figure'),
     body: root.querySelector('.dshw-body'),
+    card: root.querySelector('.dshw-card'),
     balance: root.querySelector('.dshw-balance'),
     bonus: root.querySelector('.dshw-bonus'),
     spend: root.querySelector('.dshw-spend'),
     flag: root.querySelector('.dshw-flag'),
     bubble: root.querySelector('.dshw-bubble'),
-    menuButton: root.querySelector('.dshw-menu-button'),
-    menu: root.querySelector('.dshw-menu'),
-    scale: root.querySelector('#dshw-scale'),
-    volume: root.querySelector('#dshw-volume'),
-    version: root.querySelector('.dshw-version'),
+    menuButton: controls.querySelector('.dshw-menu-button'),
+    menu: controls.querySelector('.dshw-menu'),
+    scale: controls.querySelector('#dshw-scale'),
+    volume: controls.querySelector('#dshw-volume'),
+    version: controls.querySelector('.dshw-version'),
   };
   el.version.textContent = version ? `v${version}` : '';
 
@@ -131,10 +137,28 @@ export function mountWhale(options = {}) {
     root.style.transformOrigin = 'top left';
     root.style.left = `${position.x}px`;
     root.style.top = `${position.y}px`;
-    // 贴左缘时菜单要往右开，否则 208px 的面板会被视口切掉一半；按实际坐标判定，
-    // 不用 mirrored 标志——关掉「左吸附镜像」后菜单同样得躲开视口外。
-    // 阈值取 margin：吸附后的左边缘目标就是 margin，只有自由摆放能落在这条线以里。
-    root.classList.toggle('at-left', position.x <= margin);
+    paintControls();
+  }
+
+  /**
+   * 把 ☰ 与面板贴到挂件画出来的矩形上。控件层不在缩放里，所以只能按实测坐标摆。
+   * 卡片是 nowrap 的，会顶出 128px 的根盒，面板要让开它，否则贴着根盒上缘会盖住余额的后半截。
+   * hidden 时 offsetWidth/Height 是 0，位置会算歪 —— 没关系：toggleMenu 在取消 hidden 之后再贴一次。
+   */
+  function paintControls() {
+    const box = root.getBoundingClientRect();
+    const card = el.card.getBoundingClientRect();
+    const top = Math.min(box.top, card.top);
+    const placed = placeControls({
+      anchor: { left: box.left, top, width: box.width, height: box.bottom - top },
+      menu: { width: el.menu.offsetWidth, height: el.menu.offsetHeight },
+      button: { width: el.menuButton.offsetWidth, height: el.menuButton.offsetHeight },
+      viewport: viewport(),
+    });
+    el.menu.style.left = `${placed.menu.x}px`;
+    el.menu.style.top = `${placed.menu.y}px`;
+    el.menuButton.style.left = `${placed.button.x}px`;
+    el.menuButton.style.top = `${placed.button.y}px`;
   }
 
   function placeAtRest() {
@@ -285,17 +309,15 @@ export function mountWhale(options = {}) {
     el.menu.querySelector('[data-action="sound"]').textContent = `音效：${settings.soundEnabled ? '开' : '关'}`;
     el.menu.querySelector('[data-action="snap"]').textContent = `吸附：${settings.snapEnabled ? '开' : '关'}`;
     el.menu.querySelector('[data-action="mirror"]').textContent = `镜像：${settings.mirrorOnLeft ? '开' : '关'}`;
-    root.classList.toggle('menu-hidden', settings.hideMenu);
+    controls.classList.toggle('menu-hidden', settings.hideMenu);
   }
 
   function toggleMenu(force) {
     const open = force ?? el.menu.hidden;
     el.menu.hidden = !open;
     el.menuButton.setAttribute('aria-expanded', String(open));
-    if (!open) return;
-    // 菜单默认向上开；贴顶吸附时会整块被推出视口，这时改成向下开。
-    // 必须先取消 hidden 才量得到高度（display:none 时 offsetHeight 是 0）。
-    root.classList.toggle('menu-below', el.menu.offsetHeight > root.getBoundingClientRect().top - 8);
+    // 贴位要在取消 hidden 之后做：display:none 时量不到真实宽高，位置会算歪。
+    if (open) paintControls();
   }
 
   // —— 指针交互：拖拽 / 点击 / 长按 ——
@@ -303,7 +325,6 @@ export function mountWhale(options = {}) {
   let gesture = null;
 
   el.stage.addEventListener('pointerdown', (event) => {
-    if (event.target.closest('.dshw-menu')) return;
     if (event.button !== undefined && event.button > 0) return; // 只跟主指针
     el.stage.setPointerCapture?.(event.pointerId);
     pointers.set(event.pointerId, event.pointerId);
@@ -466,6 +487,8 @@ export function mountWhale(options = {}) {
 
   root.dataset.mounted = '1';
   doc.body.appendChild(root);
+  // 控件层排在 root 之后：两者都是 fixed，DOM 顺序决定同 z-index 下的叠放。
+  doc.body.appendChild(controls);
   placeAtRest();
   syncMenuWidgets();
   source.tracker.start?.();
@@ -498,6 +521,7 @@ export function mountWhale(options = {}) {
       source.tracker.stop?.();
       audio.dispose();
       root.remove();
+      controls.remove();
     },
   };
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveSnap, snapZonePx, restingPosition, clamp } from '../src/core/layout.js';
+import { resolveSnap, snapZonePx, restingPosition, placeControls, clamp } from '../src/core/layout.js';
 
 const BASE = { width: 120, height: 120, viewportWidth: 1000, viewportHeight: 800 };
 
@@ -126,3 +126,65 @@ test('resolveSnap 拒绝非有限的 margin', () => {
   assert.throws(() => resolveSnap({ ...BASE, x: 10, y: 10, margin: NaN, snap: {} }), /margin/);
 });
 
+
+// —— 控件层贴位：☰ 与设置面板不参与缩放，坐标只能按挂件画出来的矩形现算 ——
+
+const VIEW = { width: 1000, height: 800 };
+const MENU = { width: 208, height: 170 };
+const BUTTON = { width: 22, height: 22 };
+// 右下角静置位（margin 16、scale 1）画出来的矩形
+const ANCHOR = { left: 864, top: 664, width: 128, height: 128 };
+
+test('placeControls 默认：面板右对齐挂件右缘并开在上缘之外，按钮居中贴底缘', () => {
+  const { menu, button } = placeControls({ anchor: ANCHOR, menu: MENU, button: BUTTON, viewport: VIEW });
+  assert.deepEqual(menu, { x: 784, y: 486 });
+  assert.deepEqual(button, { x: 917, y: 770 });
+});
+
+test('placeControls 面板尺寸恒定，只随挂件的矩形移动（scale 从 1 到 3）', () => {
+  const at3 = placeControls({
+    anchor: { left: 864 - 256, top: 664 - 256, width: 384, height: 384 }, // 同一只鲸鱼，右下角贴法不变
+    menu: MENU, button: BUTTON, viewport: VIEW,
+  });
+  assert.deepEqual(at3.menu, { x: 864 - 256 + 384 - 208, y: 664 - 256 - 170 - 8 });
+  assert.equal(at3.button.x, 864 - 256 + (384 - 22) / 2);
+});
+
+test('placeControls 把面板夹回视口里（贴左缘时 208px 比挂件宽得多）', () => {
+  const left = placeControls({
+    anchor: { left: 8, top: 400, width: 64, height: 64 }, // scale 0.5 贴在左边缘
+    menu: MENU, button: BUTTON, viewport: VIEW,
+  });
+  assert.equal(left.menu.x, 8, '右对齐会把左缘推出屏幕，必须夹到下界');
+
+  const narrow = placeControls({
+    anchor: ANCHOR, menu: MENU, button: BUTTON, viewport: { width: 200, height: 800 },
+  });
+  assert.equal(narrow.menu.x, 8, '视口比面板还窄时以上界无意义，退到下界而不是负数');
+
+  const bottom = placeControls({
+    anchor: { left: 864, top: 700, width: 128, height: 128 },
+    menu: MENU, button: BUTTON, viewport: VIEW,
+  });
+  assert.equal(bottom.button.y, 770, '按钮不能因为挂件贴底就掉出视口');
+});
+
+test('placeControls 头顶放不下就翻到脚下，两边都放不下就贴顶', () => {
+  const below = placeControls({
+    anchor: { left: 864, top: 100, width: 128, height: 128 },
+    menu: MENU, button: BUTTON, viewport: VIEW,
+  });
+  assert.equal(below.menu.y, 100 + 128 + 8);
+
+  const cramped = placeControls({
+    anchor: { left: 864, top: 60, width: 128, height: 80 },
+    menu: MENU, button: BUTTON, viewport: { width: 1000, height: 200 },
+  });
+  assert.equal(cramped.menu.y, 8, '上下都不够时贴着视口上缘，宁可盖住人也要让人点得到');
+});
+
+test('placeControls 拒绝非有限数字，而不是把 NaN 写进 style', () => {
+  assert.throws(() => placeControls({ anchor: { ...ANCHOR, left: NaN }, menu: MENU, button: BUTTON, viewport: VIEW }), /anchor.left/);
+  assert.throws(() => placeControls({ anchor: ANCHOR, menu: { width: 208 }, button: BUTTON, viewport: VIEW }), /menu.height/);
+  assert.throws(() => placeControls({ anchor: ANCHOR, menu: MENU, button: BUTTON, viewport: { width: 1000 } }), /viewport.height/);
+});

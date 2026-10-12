@@ -29,6 +29,22 @@ export const CSS = `
   -webkit-tap-highlight-color: transparent;
 }
 .dshw-root * { box-sizing: border-box; }
+
+/* 控件层：☰ 与设置面板挂在缩放层**之外**（whale.js 里是 .dshw-root 的兄弟节点）。
+   两个原因：① scale 0.5 时 208px 的面板会缩成 104px、12px 的字缩成 6px，点不准也读不了；
+   ② position: fixed 的后代在带 transform 的祖先里照样被那个 transform 作用，所以光改定位方式
+   逃不掉缩放。尺寸恒定，位置由 core/layout.js 的 placeControls 按挂件画出来的矩形现算。
+   原来从 .dshw-root 继承到的字体/行高/文字颜色得在这里补上，否则脱离祖先后会变默认值。 */
+.dshw-controls {
+  color: #eaf4ff;
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.3;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.dshw-controls * { box-sizing: border-box; }
+
 .dshw-stage {
   position: relative;
   width: 100%;
@@ -103,10 +119,8 @@ export const CSS = `
 }
 
 .dshw-menu-button {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%);
+  position: fixed;
+  z-index: 2147483001;
   width: 22px;
   height: 22px;
   border: none;
@@ -119,12 +133,11 @@ export const CSS = `
   cursor: pointer;
   padding: 0;
 }
-.dshw-root.menu-hidden .dshw-menu-button { display: none; }
+.dshw-controls.menu-hidden .dshw-menu-button { display: none; }
 
 .dshw-menu {
-  position: absolute;
-  right: 0;
-  bottom: 96px;
+  position: fixed;
+  z-index: 2147483001;
   width: 208px;
   padding: 8px;
   border-radius: 12px;
@@ -134,7 +147,6 @@ export const CSS = `
   font-size: 12px;
 }
 .dshw-menu[hidden] { display: none; }
-.dshw-root.menu-below .dshw-menu { bottom: auto; top: 100%; }
 .dshw-menu h2 { margin: 0 0 6px; font-size: 12px; font-weight: 600; opacity: .85; }
 .dshw-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 4px 0; }
 .dshw-row label { flex: 1 1 auto; }
@@ -151,9 +163,9 @@ export const CSS = `
 .dshw-menu button:hover { background: rgba(255,255,255,.2); }
 .dshw-version { margin-top: 6px; font-size: 10px; opacity: .55; text-align: right; }
 
-/* 贴左吸附：只翻立绘，卡片/菜单/按钮都是她的兄弟节点，跟着翻会把文字反过来 */
+/* 贴左吸附：只翻立绘。卡片/气泡是她的兄弟节点，跟着翻会把文字反过来。
+   菜单和 ☰ 压根不在缩放层里（见 .dshw-controls），更不受影响。 */
 .dshw-root.mirrored .dshw-body { transform: scaleX(-1); transform-origin: 50% 100%; }
-.dshw-root.at-left .dshw-menu { right: auto; left: 0; }
 
 .dshw-bubble {
   position: absolute;
