@@ -34,10 +34,17 @@ npm start                        # 零依赖，连 npm install 都不用
 无运行依赖、无构建步骤、无包管理器 lockfile 之外的东西 —— `dependencies` 与 `devDependencies` 都是空的。
 
 **关于这只鲸鱼长什么样**：`src/widget/whale-girl.png` 是**仓库里唯一的一张形象图**（`public/favicon.svg`
-是演示页的标签页图标，与形象无关）—— 深蓝渐变长发、女仆装、
-鲸鳍耳加一条鲸尾的全身立绘，由本项目作者用 AI 生成，再做了去水印与抠透明处理（610×610 RGBA，322 kB），
-**随下面的 MIT 一起分发**。参考项目那张 `assets/DSniang1.png` 没有被沿用，理由见
+是演示页的标签页图标，与形象无关）—— 深蓝渐变长发、女仆装、鲸鳍耳加一条鲸尾的**Q 版（大头）全身立绘**，
+由本项目作者用 AI 生成，再从一张三视图设定表里裁出正面视图、抠成透明底并去掉脚下投影
+（610×610 RGBA，551 kB；不透明部分占 536×610，长宽比 0.879），**随下面的 MIT 一起分发**。
+参考项目那张 `assets/DSniang1.png` 没有被沿用，理由见
 [`PROVENANCE.md`](PROVENANCE.md) 的「美术素材的许可边界」。想换成你自己的形象，二选一：
+
+- 把你的图放成 `src/widget/whale-girl.png`（同样底边对齐、透明底，效果最接近）；
+- 或改 `src/widget/skin.js` 的 `CHARACTER_URL` 指向任意图片 URL —— 交互逻辑不依赖这张图。
+
+立绘取不到时（路径写错、素材被删）挂件会把形象层整层藏掉并在 console 警告一次，只留余额卡片，
+不会留一个裂图图标 —— 仓库里没有第二张形象图可回落。
 
 - 把你的图放成 `src/widget/whale-girl.png`（同样底边对齐、透明底，效果最接近）；
 - 或改 `src/widget/skin.js` 的 `CHARACTER_URL` 指向任意图片 URL —— 交互逻辑不依赖这张图。
@@ -217,7 +224,7 @@ CPU 密集地装载 profile 里的 188 个模块（从 121 MB 的 `app.asar` 读
 ```
 src/core/      money / layout / ledger / balance / jsonpath —— 纯逻辑，浏览器与 Node 共用
 src/widget/    whale / skin / state / audio / dsh-source    —— 渲染与手势，DOM 胶水
-               whale-girl.png —— 鲸鱼娘立绘（本项目自带素材，随 MIT 分发；仓库里唯一的一张形象图）
+               whale-girl.png —— 鲸鱼娘 Q 版立绘（本项目自带素材，随 MIT 分发；仓库里唯一的一张形象图）
 src/server/    app / config / static / store / env / start  —— handler 与接线
                providers/{deepseek,mock}、dsh-routes.js
 public/        index.html（演示页）、app.css、demo.js、favicon.svg、dsh.html（模拟宿主）
