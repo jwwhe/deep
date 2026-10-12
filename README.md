@@ -229,7 +229,7 @@ src/server/    app / config / static / store / env / start  —— handler 与�
 public/        index.html（演示页）、app.css、demo.js、favicon.svg、dsh.html（模拟宿主）
 assets/        whale-widget.js —— DSH 注入入口
 lib/index.js   DSH 插件入口（cordis：apply + inject，注册 /dsh-whale 前缀路由与 index 注入）
-test/          138 条 node:test 单元测试；helpers/tmp.js 统一建临时目录、进程退出时清掉
+test/          143 条 node:test 单元测试；helpers/tmp.js 统一建临时目录、进程退出时清掉
 scripts/       e2e-check.js —— 真进程 + 真 HTTP 的 39 项检查
 docs/          architecture / limitations / verification
 ```

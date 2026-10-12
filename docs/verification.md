@@ -218,7 +218,7 @@ CDP 读到 `bodyHidden = true`；截图里既没有裂图图标也没有鲸鱼�
 | `placeAtRest` 键名传错 | 挂件跑到视口外、无任何报错 | 调用点键名对齐 + `restingPosition` 校验有限数字 | `layout.test.js` |
 | 镜像规则翻转了卡片 | 贴左时菜单/卡片文字反了 | 只翻转形象本身（当时是 SVG 的 `body-group`，换立绘后是 `img.dshw-body`），文字层不跟着翻 | 浏览器复验 |
 | 菜单贴顶被切 | 吸上缘后菜单开在视口外 | 先 unhide 再量高，必要时向下开 | 浏览器复验 |
-| 关镜像后贴左菜单被切 | 菜单仍按 mirrored 判定 | 改按坐标判定 `at-left` | 浏览器复验 |
+| 关镜像后贴左菜单被切 | 菜单仍按 mirrored 判定 | 改按坐标判定 `at-left` | 浏览器复验（`at-left` 现已被第十四节的坐标贴位取代） |
 | 缩放/改窗口后浮在屏幕中间 | 只 clamp 不 re-anchor | 新增 `lastEdge` + `resnap()` | 浏览器复验 |
 | **静置位被 resize 吸成贴边**（margin 16 落在吸附区内） | 首次 resize 后鲸鱼凭空往里跳 16px、压到视口边缘 | `resolveSnap` 支持 `margin`，静置/吸附/resize 三条路径共用同一内缩规则 | `layout.test.js` 新增 4 条 |
 | `queueValue('abc')` 抛穿 500 | mock 接口变成 500 | 边界处 `tryParseAmount` → 400，`fail` code 加白名单 | `app.test.js` + e2e |
@@ -236,7 +236,7 @@ CDP 读到 `bodyHidden = true`；截图里既没有裂图图标也没有鲸鱼�
 
 | 现象 | 为什么没顺手修 |
 | --- | --- |
-| scale 调到 3 时气泡顶出视口（实测 `top=-286`，scale 1 时完全在屏内） | 换形象前就存在（气泡底边 108→126→148 只是把它抬高了一点），修法要给气泡也做「放不下就往下翻」，与 `menu-below` 同级；本轮范围是形象，不扩到手势层。已记进 [`limitations.md`](limitations.md) 小坑清单 |
+| scale 调到 3 时气泡顶出视口（实测 `top=-286`，scale 1 时完全在屏内） | 换形象前就存在（气泡底边 108→126→148 只是把它抬高了一点），修法要给气泡也做「放不下就往下翻」，与 `menu-below` 同级（这两个类名现已被第十四节的坐标贴位取代，气泡那条坑仍在）；本轮范围是形象，不扩到手势层。已记进 [`limitations.md`](limitations.md) 小坑清单 |
 | 立绘素材的许可风险 | 属于「必须记录」而不是「必须修」：`private: true` 挡住了误发布，`LICENSE`/`PROVENANCE.md`/`README.md` 已写明不在 MIT 内、发布前要换图 |
 
 ## 八、DSH 真宿主：cordis 探针 + desktop profile 安装
@@ -458,8 +458,8 @@ Electron 的 `index.html` 要等这张注入表，`ready` 之后还串着 `authe
 中心漂移 0，但 42 字的诊断句仍然是 5 行 —— 因为立绘本身只有 128 px，`max-width:100%` 就是天花板。
 不放到 220 px 是有理由的：吸附在右边时卡片中心离视口右缘只有 64 px，放到 220 px 会溢出 46 px，
 宁可多两行也不要一句看不全的话。`.dshw-menu-button` 和 `.dshw-bubble` 各自的 `translateX(-50%)` 没动，
-`.dshw-root.mirrored` 只翻立绘，所以这次改动不影响镜像与菜单。DOM 层没有测试框架（138 条单测都不碰 DOM），
-这几行数字是浏览器里量出来的。
+`.dshw-root.mirrored` 只翻立绘，所以这次改动不影响镜像与菜单。DOM 层没有测试框架（当时 138 条单测都不碰 DOM，
+现 143 条同样不碰），这几行数字是浏览器里量出来的。
 
 ### A/B：把本插件摘掉再各测一次冷启动
 
