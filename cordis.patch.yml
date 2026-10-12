@@ -1,0 +1,21 @@
+# ============================================================================
+# dsh-whale-widget-proto —— DSH bundle patch
+# ============================================================================
+# 插件的「挂载声明」：DSH 启动时把 bundle 层各插件的 patch 叠加到 profile 配置树上，
+# 本文件负责把自己插进 profile 的 bundles 列表（web / desktop 两种形态都吃这一份）。
+# 形状照参考项目 MeteorNOX/DeepSeek-Balance-Whale-Widget 的 cordis.patch.yml：
+# 一个 `- insert:` 列表项，id / name 都取 npm 包名。
+#
+# id 用 dsh-whale-widget-proto 而不是上游的 dsh-whale-widget：DSH 按包名识别插件，
+# 同名安装会和已发布的上游包冲突（参考项目 README 明确警告过「二选一、别混用」）。
+#
+# 本机已把它装进 desktop profile 并用宿主自己的装载器（dsh-app-boot 的 loadProfileDirectory）
+# 验过组合结果：本 bundle 未被 skip，条目落在组合后 188 条的末尾。步骤见 docs/verification.md。
+#   dsh plugin --profile desktop add link:<本目录绝对路径>
+# 这条命令要 pnpm 能联网（它会顺带重解析 profile 里已有的 tarball 依赖）；离线机器可手工做等价动作：
+# node_modules 里建 junction + package.json 补 dependencies 与 dsh.profile.bundles。
+# ============================================================================
+
+- insert:
+    - id: dsh-whale-widget-proto
+      name: dsh-whale-widget-proto

@@ -1,0 +1,50 @@
+{
+  "name": "dsh-whale-widget-proto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "可独立运行的 DeepSeek 余额鲸鱼娘挂件原型：零依赖 Node 服务 + 无构建步骤的 ESM 前端挂件 + DSH bundle 适配器",
+  "keywords": [
+    "deepseek",
+    "balance",
+    "widget",
+    "dsh",
+    "dsh-plugin",
+    "prototype"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "public",
+    "assets",
+    "docs",
+    "cordis.patch.yml",
+    ".env.example",
+    "README.md",
+    "PROVENANCE.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "scripts": {
+    "start": "node src/server/start.js",
+    "dev": "node --watch src/server/start.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:e2e": "node scripts/e2e-check.js",
+    "check": "npm test && npm run test:e2e"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

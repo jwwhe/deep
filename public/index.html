@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>鲸鱼娘余额挂件 · 原型演示</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">🐋</span>
+      <div>
+        <h1>DSH 鲸鱼娘余额挂件 · 可运行原型</h1>
+        <p class="sub">右下角的鲸鱼娘是 <code>src/widget/whale.js</code>，这一页只是给它一个宿主界面</p>
+      </div>
+    </div>
+    <div class="host-status" id="host-status">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">连接中…</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="chat" aria-label="模拟对话窗口">
+      <div class="chat-log" id="chat-log">
+        <div class="msg them"><span class="who">DeepSeek</span>你好，我是运行在本地的模拟对话窗口。右下角的鲸鱼娘会一直盯着余额。</div>
+        <div class="msg me">拖它一下试试，贴左边缘会镜像翻转。</div>
+        <div class="msg them">点它可以手动刷新余额，余额变动时数字会滚动。</div>
+      </div>
+      <div class="chat-input">
+        <input type="text" placeholder="（这一栏是装饰，原型不做对话）" aria-label="模拟输入框" disabled>
+        <button type="button" disabled>发送</button>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="控制与事件日志">
+      <h2>数据源</h2>
+      <p class="hint" id="provider-hint">—</p>
+      <div class="btn-row">
+        <button type="button" data-mock="spend">模拟扣费 −0.42</button>
+        <button type="button" data-mock="recharge">模拟充值 +50</button>
+        <button type="button" data-mock="fail">模拟一次网络失败</button>
+      </div>
+      <div class="field">
+        <label for="set-value">直接设定余额</label>
+        <div class="inline">
+          <input id="set-value" type="text" value="128.60" inputmode="decimal">
+          <button type="button" id="apply-value">应用</button>
+        </div>
+      </div>
+
+      <h2>当前状态</h2>
+      <dl class="state-grid" id="state-grid">
+        <dt>余额</dt><dd id="s-balance">—</dd>
+        <dt>今日已用</dt><dd id="s-spend">—</dd>
+        <dt>状态</dt><dd id="s-status">—</dd>
+        <dt>更新时间</dt><dd id="s-updated">—</dd>
+      </dl>
+
+      <h2>挂件事件</h2>
+      <ul class="events" id="events" aria-live="polite"></ul>
+      <p class="hint">事件来自挂件回调：吸附边、镜像、设置改动、取数状态。</p>
+
+      <h2>自定义选项</h2>
+      <div class="btn-row">
+        <button type="button" data-setting="snapEnabled">切换吸附</button>
+        <button type="button" data-setting="mirrorOnLeft">切换左吸附镜像</button>
+        <button type="button" data-setting="hideMenu">切换菜单按钮</button>
+      </div>
+      <div class="field">
+        <label for="scale-range">大小 <span id="scale-out">1.00</span></label>
+        <input id="scale-range" type="range" min="0.5" max="3" step="0.05" value="1">
+      </div>
+      <p class="hint">这些选项会 <code>POST /api/settings</code> 落到数据目录，重启后还在。</p>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    <span>拖拽 · 四边吸附 · 左吸附镜像 · 数字滚动 · 点击刷新 · 右键/长按开菜单</span>
+    <span id="foot-provider"></span>
+  </footer>
+</div>
+
+<script type="module" src="/demo.js"></script>
+</body>
+</html>

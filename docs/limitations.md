@@ -1,0 +1,135 @@
+# 已知限制
+
+按「会不会咬到你」从大到小排。每条都写了是什么状态、为什么停在这个状态。
+
+## 1. DSH 真机：已挂上并显示真实余额（充值与赠送两个钱包都取到），剩一条冷启动体验坑
+
+这一条改过两次，两次都是被真机打脸之后改的，所以把过程留下：
+
+- 最初写的是「本机没有 dsh CLI，宿主那一侧一行都没实测过」—— 不对，本机一直拿着桌面安装里的真宿主。
+- 改写成「契约已验证」之后，**客户端实测其实没挂上**：`GET http://127.0.0.1:19387/dsh-whale/api/state`
+  返回空 body 的 404，和不存在的路径一模一样。拿同一个 profile 里确定已加载的第三方插件做对照才确认这不是
+  鉴权遮蔽 —— `dsh-purge` 的 `/redteam/api` 未登录也能命中（`405 {"ok":false,"error":"POST only"}`），
+  所以「插件路由不需要会话就能被摸到」，我的 404 是真的没注册。
+- 根因：`export default apply`。真 Loader（`@deepseek-ai/cordis-plugin-loader`）的 `unwrapExports()`
+  **先取 `default`**，裸函数 default 让模块上的 `inject` 整体丢失，读 `ctx.webServer` 就成了
+  「没 inject 就读」→ 激活失败 → 路由没注册。桌面客户端把引擎 stderr 收在内存里，只在启动失败时才吐出来，
+  所以现场什么都没有。之前那 15 条宿主探针全是直接 `apply()` 的，绕过了 Loader，因此全绿也没拦住它。
+
+**现在确实用真包跑通的**：
+
+- `.dsh-probe/probe.mjs`（真 cordis 上下文 + 真 `dsh-host-webserver`，16/16）：prefix 路由真的接得住请求、
+  `webserver/index-inject` 那一行 script 真的被 `renderIndex` 渲染进 `<body>`、余额按宿主字段名 `totalBalance` 回出；
+- `.dsh-probe/loader-probe.mjs`（真 `cordis-plugin-loader` + `mountRootInclude`，9/9）：插件**经装载器**激活、
+  路由注册、注入表有行、入口脚本 200；并且用同形状的坏 fixture 证明这个探针抓得住这类缺陷；
+- 桌面链路读源码核到实处（`collectIndexInjections()` 只在 ready 时收一次、渲染层 `case"script"` 认 `text`、
+  `dsh-app://app/*` 非静态路径带宿主 cookie 转回本进程），细节与行号见 [`verification.md`](verification.md) 第八节；
+- 装进 `desktop` profile 后用宿主自己的 `loadProfileDirectory` 复核：bundle 未被 skip，条目落在组合结果末尾。
+
+**客户端内已经真机确认的**：完全退出并重启后右下角出现鲸鱼娘立绘与卡片，层叠没盖住右侧栏/输入框；
+`GET http://127.0.0.1:19387/dsh-whale/balance.json` 由本插件的 handler 处理（无宿主会话时回 401
+`unauthenticated`，这条 JSON 出自我们自己的代码），说明路由注册与 `connection.admit` 门禁在真客户端里都成立。
+余额口径上一轮也按官网改过（默认只算充值余额，赠送单列一行）。
+
+**上面那个「未配置」在 2026-10-12 复查时已经解释清楚了**：把客户端窗口还原后截图，挂件显示的是
+`¥ <充值余额> / 赠送 ¥<赠送余额> / 今日 ¥0.00`（金额属本机账户，文档里隐去，两个数都确实取到了）
+—— 三级来源的第一级 `ctx.deepseekAccount` 在真宿主上是**通的**，
+两个钱包也照官网口径分成了两行。昨天那句「未配置 DEEPSEEK_API_KEY」是**冷启动时间差**，不是取数缺陷：
+宿主的 `authenticateWebHost` 排在引擎 `ready` **之后**，而挂件 `start()` 立即取第一拍，那一拍账号服务必然还没会话
+→ 回 `unconfigured`；它属配置类错误，`nextDelay()` 按 `intervalMs`（60 s）轮询，所以最长一分钟自愈。
+结论：**每次冷启动，挂件会有最多 60 秒挂着红脸说「未配置」**。那一刻的文案并不算说谎（确实没会话），
+但对用户是误导。要压掉这段，只能让首拍对 `unconfigured` 也走短间隔快探（现在只有 `pending`/idle 走 `minRetryMs`）
+—— 属体验取舍，未擅自改。
+
+顺带留下的诊断能力：`whale.js` 的 `unconfigured` 分支已从「压成固定文案」改成**透传 provider 原文**，
+所以真要是某一级来源坏了，卡片会直接写出「宿主没有可用的余额来源（…）」而不是含糊一句未配置。
+
+**启动头几百毫秒的门禁行为**：提供 `connection` 服务的 bundle（`dsh-client-connection`）可能比本插件
+**晚激活**，那个窗口里本插件一律回 `503 guard-unavailable`（**缺席当成不放行**，且每请求现取、不缓存缺席）。
+代价是挂件在引擎端口刚监听后会多等一两拍再自动重试；换来的是不再有「无会话本地请求拿到真实余额」的窗口
+—— 这是真机测启动耗时那轮实测出来的缺陷，改前 `balance.json` 曾回 200 + 真实金额。
+
+**别把启动慢算到挂件头上（已做 A/B）**：完整客户端启动 75–92 s，其中约 74 s 是宿主自己在 CPU 密集地
+挂载 profile 里的 188 个模块（从 121 MB 的 `app.asar` 读）并 `await` 到 `desktop-office` 才发 `ready`；
+挂件只占 67 ms（import 62 + `apply` 5）。为了排除「是装上插件才变慢」，把本插件从 profile 的
+`bundles` + `dependencies` 两处摘掉重测两次（75.7 / 78.6 s），带插件测到 74.8 s —— 当天最快那次就带着插件，
+两组区间完全重叠，**与本插件无关**。噪声尺度约 ±15 s，所以此前「冷 90.7 vs 热 79.2」的差值本身也别当结论用。
+八组采样、分段与 A/B 细节见 [`verification.md`](verification.md) 第九节；函数级热点没拿到
+（`--cpu-prof` 被 Electron 剥离，`NODE_OPTIONS` 对子进程无效）。
+
+真机取数用的是 `ctx.deepseekAccount.getBalance(client)`，它的返回结构是按 `@deepseek-ai/dsh-deepseek-account-platform`
+源码读出来的（`value` / `bonusWallets` 两组 `{currency, balance}`），结构对不上时报错而不是显示 0（`src/core/wallets.js`）。
+
+## 2. 真实凭据下的完整链路未跑通
+
+- `providers/deepseek.js` 的**端点与失败分类**用真网络验证过：`GET https://api.deepseek.com/user/balance`
+  无 key 时回 `401` + 纯文本 `Authentication Fails (governor)`，所以 `JSON.parse` 失败是常态而非异常，这条路径有测试。
+- **有 key 的真实余额没验过**（本机无可用密钥）。`BALANCE_FIELDS` 里三个候选字段
+  （`total_balance` / `balance_infos[0].total_balance` / `balance_units[0].amount`）是按历史响应结构做的兼容列表，
+  真账号若返回第四种结构会报 `field-not-found`（不会静默显示 0）。
+- 峰谷定价、每轮消耗明细这类**上游本身不提供**的数据不做，只做余额与按日差值。
+
+## 3. 「今日已用」是差值推断，不是账单
+
+上游只给余额快照。挂件按自然日对余额差记账：下降算消耗、上升只进 `adjustment` 不算负消耗、
+跨天重新起算。接宿主账号服务时记账基数是**充值 + 赠送的总额**（赠送被扣掉时充值余额可以不动），
+所以默认口径下卡片上的余额与今日已用不是同一个数。所以**同一天内充值后再消费，得到的今日已用会偏小**；
+它不是官方账单，别拿去对账。账本保留 365 天 / 2 万条，超出按最早的日子裁掉。
+
+## 4. 美术素材：仓库自带一张自己生成的立绘，上游那张没进仓库
+
+形象 `src/widget/whale-girl.png`（610×610 RGBA、透明底、322 kB）是**本项目作者自己用 AI 生成**的
+角色设定图，处理后随 MIT 分发。参考项目那张 `assets/DSniang1.png` 的上游写明它的 `assets/**`
+是 AI 生成、出处不可考，**不在其 MIT 范围内**、不授予再许可 —— 本项目早期确实取过一份做本地对照，
+但**从未提交进仓库、从未随包分发，对照完已于 2026-10-12 从本机删除**，现在这张图与它没有像素关系。要点：
+
+- 处理三步（去水印 / 连通洪泛抠背景 / 裁切 contain）的参数与踩到的判断依据记在
+  [`PROVENANCE.md`](PROVENANCE.md)「美术素材的许可边界」，脚本本身是临时的、不入库。
+- **抠图是脚本做的，不是人肉描的**：边缘靠 3×3 alpha 软化 + 预乘域去光晕，放大看仍有轻微锯齿，
+  挂件这个尺寸（96 px 高）看不出来，但要拿去印海报得重做。
+- **形象图只有这一张**，没有备用立绘。取不到时 `whale.js` 在 `error` 事件里把形象层 `hidden` 掉、
+  警告一次，只剩余额卡片 —— 不会再显示裂图图标，但也没有任何东西可看。
+  （`.dshw-body[hidden] { display: none }` 这条规则是必需的：作者样式里的 `display: block` 会盖掉
+  `[hidden]` 的 UA 规则，不写就等于没隐藏。）
+- 换形象的成本很低：放同名 png，或改 `CHARACTER_URL`；按需微调 `.dshw-figure` / `.dshw-card` 的几何即可，
+  逻辑层完全不依赖这张图（素材断言在 `scripts/e2e-check.js` 与 `test/plugin.test.js`，各断言 png 两条前缀）。
+- 立绘目前是**全身**装进 96 px 高的形象盒，脸只有十几像素。想让形象更大可以只改
+  `.dshw-figure` 的 `height`（96 → 128，即占满根盒），代价是卡片/菜单/气泡的三个 `bottom` 值要一起挪。
+- `package.json` 仍带 `private: true`：它是个原型，不打算当正式包发布，与许可无关。
+- 未做：没有运行时联网取素材的逻辑，形象只有本地这一份。
+
+## 5. 未验证的运行环境
+
+| 项 | 状态 |
+| --- | --- |
+| 优雅关闭 | Windows 不投递 SIGTERM，e2e 在 Windows 上只验「进程退出」，`SIGINT/SIGTERM` 的清理路径需 POSIX 环境复验 |
+| `prefers-reduced-motion` | `whale.js` 读 `matchMedia` 并据此关闭滚动动画，但**没有在系统真开了「减弱动画」的环境下实测** |
+| 浏览器兼容 | 只在 Chromium（browser-use 驱动）实测。依赖原生 ESM + `fetch` + WebAudio，Safari/Firefox 未测 |
+| 响应式 | 实测 380 / 700 / 1000 / 1280 四档零横向溢出；删掉兜底图那轮又用 CDP `Emulation.setDeviceMetricsOverride` 复测 320 / 360 / 420 / 768 / 1280，横向溢出仍全 0、挂件盒始终 128×128 且四边留 16 px（见 `verification.md` 第六节）。更窄（<320）、高 DPI、浏览器缩放组合未测 |
+| 并发与性能 | 无压测。单进程、请求内按需读盘、无缓存层，设计目标是本机自用 |
+| 多实例 | 落盘是原子写（`.tmp` + `rename`）但**没有跨进程锁**。两个进程共用同一 `DSHW_DATA_DIR` 会互相覆盖存档 |
+
+## 6. 明确不做（按任务边界）
+
+用户体系与鉴权、多租户、付费与商业化、生产级部署与运维（TLS、反代、进程守护、日志采集）、
+以及参考项目里那些与「余额一目了然」无关的边缘功能（自定义泡泡点击序列、逐行字体、角色/动图/音效编辑、悬浮快捷编辑）。
+这个原型的取舍是：**把「装上就能看见余额变动」这条主路径做通、做稳、做可测**，其余留给后续。
+
+## 7. 小坑清单
+
+- `.env` 不支持行内注释与变量插值（`KEY=v # 注释` 里的 `# 注释` 会成为值的一部分）。
+  这是刻意的：各家 dotenv 实现在这两点上互相打架，宁可踩一个明确的坑。
+- `npm test` 传的是 glob，需要 Node ≥ 21；服务本身 Node ≥ 20.10 即可（实测 v22.18.0）。
+- `DSHW_HOST` 改成 `0.0.0.0` 只放开「看」，写权限仍只认回环 —— 想远端改设置必须显式配 `DSHW_ADMIN_HOSTS`。
+  **不要把不设 `DSHW_ADMIN_HOSTS` 的实例暴露到公网**：接口本身没有鉴权，靠的就是地址判定。
+- 挂件位置（拖到哪）不持久化，刷新后回到右下角初位。持久化的是外观设置（scale/吸附/镜像/菜单）与账本。
+- **size 调太大时气泡会顶出视口上沿**：实测 scale 1 完全在屏内，scale 3 时 `top=-286`（被裁掉）。
+  菜单有 `menu-below` 的「放不下就朝下开」逻辑，气泡没有 —— 换立绘前就存在这个坑，本轮没顺手扩范围修。
+- `npm pack` 产物里最大的一项就是这张 322 kB 的立绘（实测数字见 `verification.md` 第六节）；
+  要瘦身可以把它降到 512×512，代价是放大档位下更糊 —— 目前没做。
+- 音效需要浏览器用户手势后才能出声，脚本化/无交互环境里静默。
+- `package.json` 带 `private: true`，没发到 npm，`link:`/`file:` 之外的安装路径不可用。
+- `.refs/` 是本地参考材料（参考项目 README 与两个配置文件的副本），
+  `.dsh-probe/` 是真宿主探针（含指向桌面安装 `node_modules` 的 junction），两者都不入库、不随包发布
+  —— 所以文档里凡是提到探针产物与真机截图的地方，都是**作者本机**的结果，别人 clone 后复现不到那一层。
+  （曾经放在这里的两张 AI 原始出图与上游立绘副本，已按 2026-10-12 的决定全部删除，见 `PROVENANCE.md`。）

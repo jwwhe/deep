@@ -1,0 +1,19 @@
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+
+# 运行时数据（余额账本与外观设置），不要入库
+.dshw-*.json
+data/
+
+# 参考材料草稿
+.refs/
+
+# 真宿主探针：里面有指向桌面安装 node_modules 的 junction，且引用宿主内部结构，只在作者机器上跑得起来
+.dsh-probe/
+
+# AI 出图草稿（候选形象、三视图设定表），只在本机留着看，不入库
+vibe_images/
