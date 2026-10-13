@@ -9,6 +9,12 @@ export const WIDGET_CSS_ID = 'dshw-style';
 
 export const DEFAULT_SIZE = 128; // 逻辑尺寸（像素），scale 再乘一遍
 
+// 气泡尾巴尖端相对气泡底缘往下探 15px，再留 4px 不压到余额卡片。
+// 卡片会因赠送行 / 诊断文案变高，所以气泡的 bottom 由 whale.js 按卡片实测高度现算，
+// 这个常量是 CSS 与那段 JS 之间唯一的约定。
+export const BUBBLE_TAIL_PX = 15;
+export const BUBBLE_OFFSET_ABOVE_CARD = BUBBLE_TAIL_PX + 4;
+
 export const CHARACTER_URL = new URL('./whale-girl.png', import.meta.url).href;
 
 export const FIGURE_HTML = `
@@ -169,24 +175,49 @@ export const CSS = `
 
 .dshw-bubble {
   position: absolute;
-  left: 50%;
-  bottom: 148px;
-  transform: translateX(-50%);
-  max-width: 220px;
-  padding: 6px 10px;
-  border-radius: 12px;
-  border-bottom-left-radius: 4px;
-  background: #fff;
+  left: 0;
+  right: 0;
+  bottom: 160px; /* 只是兜底初值；实际底边由 whale.js 按卡片实测高度写进 style */
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 7px 11px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff, #e8f3ff);
   color: #16283d;
   font-size: 12px;
-  box-shadow: 0 6px 18px rgba(0,0,0,.22);
+  text-align: center;
+  box-shadow: 0 6px 16px rgba(8, 22, 42, .24), inset 0 1px 0 rgba(255, 255, 255, .85);
   white-space: normal;
+  transform-origin: 50% 100%;
 }
 .dshw-bubble[hidden] { display: none; }
+/* 尾巴：两颗一大一小的泡往下错开，尖端停在余额卡片上缘外面一点，看着像从她那边冒上来的。
+   宽度不能用旧的 left:50% + translateX(-50%)：那样 shrink-to-fit 只能吃包含块的一半
+   （根盒 128 → 可用 64），一句 14 字会折成五行的窄柱。left/right:0 + max-content 才吃满根盒。 */
+.dshw-bubble::before,
+.dshw-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  border-radius: 50%;
+  background: #f0f7ff;
+}
+.dshw-bubble::before { width: 11px; height: 11px; bottom: -8px; margin-left: -10px; }
+.dshw-bubble::after { width: 7px; height: 7px; bottom: -${BUBBLE_TAIL_PX}px; margin-left: 5px; }
+
+/* 弹出来的那一下挂在 .in 上，由 showBubble 每次重挂类名：光靠 display 切换，
+   气泡已经开着再点一次时动画不会重跑。 */
+.dshw-bubble.in { animation: dshw-bubble-pop .22s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes dshw-bubble-pop {
+  from { transform: scale(.55); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .dshw-float { animation: none; }
   .dshw-stage, .dshw-figure { transition: none; }
+  .dshw-bubble.in { animation: none; }
 }
 `;
 

@@ -31,7 +31,7 @@ src/server/   handler 与接线。
 ```
 
 `createApp` 不 import `http`、不 import `fs` 之外的 Node 专有物，所以路由、校验、回环边界全部能在
-`node --test` 里直接调用，不必起端口 —— 这是 143 条单测跑得快的原因。
+`node --test` 里直接调用，不必起端口 —— 这是 146 条单测跑得快的原因。
 
 ## 二、免打包的关键：同一份源码在两边都能解析
 
@@ -133,4 +133,11 @@ fixed 后代照样会被那个 transform 作用（缩放/位移都会带上）�
 拆分带来的两个隐性账：① 控件层脱离了 `.dshw-root`，原来继承的字体/行高/文字颜色/`user-select`
 必须在 `.dshw-controls` 上补一遍；② `display: none` 时 `offsetWidth/Height` 全是 0，量不到真实尺寸，
 所以 `toggleMenu()` 在取消 hidden **之后**再贴一次位。吸附、拖拽、镜像都只看缩放层，不受这层拆分影响。
+
+**气泡（`.dshw-bubble`）的取舍跟面板相反，它留在缩放层里**：它要的是「跟着她的体型走」，尾巴得指着她，
+所以字号一起缩放 —— scale 0.5 时字会小到 6 px，这条写在 `limitations.md` §7，与「面板恒定 12 px」是两种刻意。
+它唯一按实测算的是**底边**：余额卡片是 `bottom: 100px` 往上长的（赠送行、诊断文案都会加高），
+固定 `bottom` 的气泡会被卡片压住，所以 `showBubble()` 每次显示时按
+`getComputedStyle(card).bottom + card.offsetHeight + BUBBLE_OFFSET_ABOVE_CARD` 现写。
+`100` 这个数只出现在 CSS 里，JS 从 computed style 读回来，不在两边各抄一遍。
 

@@ -2,7 +2,7 @@
 // 任何数值规则（吸附、金额、滚动序列、轮询）都在 ./core 里，这里不重复实现。
 import { formatAmount, rollingFrames } from '../core/money.js';
 import { resolveSnap, restingPosition, placeControls, EDGES } from '../core/layout.js';
-import { DEFAULT_SIZE, FIGURE_HTML, ensureStyle } from './skin.js';
+import { DEFAULT_SIZE, FIGURE_HTML, BUBBLE_OFFSET_ABOVE_CARD, ensureStyle } from './skin.js';
 import { createAudio } from './audio.js';
 
 const CLICK_THRESHOLD_PX = 5;
@@ -271,7 +271,15 @@ export function mountWhale(options = {}) {
 
   function showBubble(text, ms = 2600) {
     el.bubble.textContent = text;
+    // 卡片有赠送行/诊断文案时会往上长，底边按「卡片自己的 bottom + 实测高度」现算，
+    // 尾巴才不会压在卡上。100 这个数只写在 CSS 里，所以从 computed style 读，不在 JS 再抄一遍。
+    const cardLift = Number.parseFloat(win.getComputedStyle(el.card).bottom) || 0;
+    el.bubble.style.bottom = `${cardLift + el.card.offsetHeight + BUBBLE_OFFSET_ABOVE_CARD}px`;
     el.bubble.hidden = false;
+    // 重挂 .in 才会重新起跑动画：连着点几次时气泡一直开着，display 没变。
+    el.bubble.classList.remove('in');
+    void el.bubble.offsetWidth;
+    el.bubble.classList.add('in');
     if (bubbleTimer !== null) win.clearTimeout(bubbleTimer);
     if (ms > 0) bubbleTimer = win.setTimeout(() => { el.bubble.hidden = true; }, ms);
   }

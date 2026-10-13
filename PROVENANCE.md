@@ -38,7 +38,7 @@ README/`package.json`/`cordis.patch.yml` 内容，副本留在 `.refs/`（仅本
 - **状态机双侧复用**：`createBalanceTracker` 同时驱动服务端轮上游和客户端轮 `/api/state`，
   stale/退避/并发去重只有一份实现。
 - **按自然日记账的 ledger**（`baseline / unchanged / spend / adjustment / rollover` 五类观测）。
-- 分层与注入式可测性、143 条单元测试、39 项 e2e、浏览器四档宽度与拖拽/吸附/镜像实测。
+- 分层与注入式可测性、146 条单元测试、39 项 e2e、浏览器四档宽度与拖拽/吸附/镜像实测。
 
 ## 与参考项目的差异（有意为之）
 
